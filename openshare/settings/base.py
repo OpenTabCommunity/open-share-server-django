@@ -95,4 +95,6 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-cert_expire_time = 60 * 60 * 24 * 30 #one month
+CERT_EXPIRE_TIME = 60 * 60 * 24 * 30 #one month
+ED25519_PRIVATE_KEY_B64 = ""
+ED25519_ISSUER = ""

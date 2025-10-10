@@ -2,7 +2,7 @@ import uuid
 from datetime import timezone
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
-# from openshare.settings import cert_expire_time TODO: set this in settings
+# from openshare.settings import CERT_EXPIRE_TIME TODO: set this in settings
 from django.utils.translation import gettext_lazy as _
 
 
@@ -151,3 +151,12 @@ class DeviceCerts(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         verbose_name = _("Device certs")
+
+
+    def set_issuer_id(self, issuer=None):
+        self.issuer_id = issuer
+
+    def set_revoked_at(self, new_time=None):
+        if new_time is None:
+            new_time = timezone.now()
+        self.revoked_at = new_time
