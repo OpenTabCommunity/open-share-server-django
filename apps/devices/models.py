@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 cert_expire_time = 60 * 60 * 24 * 30 #one month
 
 
-class Device(AbstractBaseUser, PermissionsMixin):
+class Device(PermissionsMixin):
 
     id = models.UUIDField(
         _("ID"),
@@ -103,7 +103,7 @@ class Device(AbstractBaseUser, PermissionsMixin):
 
 
 
-class DeviceCerts(AbstractBaseUser, PermissionsMixin):
+class DeviceCerts(PermissionsMixin):
 
     id = models.UUIDField(
         _("ID"),
@@ -160,3 +160,83 @@ class DeviceCerts(AbstractBaseUser, PermissionsMixin):
         if new_time is None:
             new_time = timezone.now()
         self.revoked_at = new_time
+
+
+class Crls(PermissionsMixin):
+    id = models.BigAutoField(
+        _("ID"),
+        primary_key=True,
+        null=False
+    )
+
+    version = models.IntegerField(
+        _("Version"),
+        unique=True,
+        null=False
+    )
+
+    issued_at = models.DateTimeField(
+        _("issued at"),
+        null=False,
+    )
+
+    issuer_id = models.CharField(
+        _("issuer id"),
+        max_length=255,
+        null=False
+    )
+
+    crl_blob = models.JSONField(
+        _("CRL blob"),
+        default=dict,
+    )
+
+    sig = models.BinaryField(
+        _("Signature"),
+        null=False,
+    )
+
+    notes = models.TextField(
+        _("Notes"),
+    )
+
+class CrlEntries(PermissionsMixin):
+
+    crl_id = models.ForeignKey(
+        'Crls',
+        on_delete=models.CASCADE,
+        null=False,
+    )
+
+    revoked_device_id = models.ForeignKey(
+        'Device',
+        on_delete=models.CASCADE,
+        null=False,
+    )
+
+    revoked_at = models.DateTimeField(
+        _("revoked at"),
+        null=False,
+    )
+
+    reason = models.TextField(
+        _("Reason"),
+    )
+
+
+class CurrentCrl(PermissionsMixin):
+
+    id = models.IntegerField(
+        _("ID"),
+        null=False,
+    )
+
+    crl_id = models.ForeignKey(
+        'Crls',
+        on_delete=models.CASCADE,
+    )
+
+    updated_at = models.DateTimeField(
+        _("updated at"),
+        default= timezone.now
+    )
