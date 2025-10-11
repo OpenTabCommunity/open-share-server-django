@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class TrustConfig(AppConfig):
+class AccountsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'trust'
+    name = 'accounts'
