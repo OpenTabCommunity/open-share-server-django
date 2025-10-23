@@ -1,16 +1,19 @@
-# myapp/api.py
 import base64
-import json
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from jsonschema import validate as jsonschema_validate, ValidationError as JSONSchemaValidationError
-
-from apps.accounts.models import Account
+from .models import CrlEntries, Crls, CurrentCrl
+from cryptography.hazmat.primitives.asymmetric import ed25519
+import json
+import os
+from datetime import timedelta
+from django.utils import timezone
+from django.db import transaction
+from rest_framework.permissions import IsAuthenticated
+from cryptography.hazmat.primitives import serialization
 from .models import Device, DeviceCerts
-from .utils import issue_device_cert
+
 
 DEVICE_REGISTER_SCHEMA = {
     "title": "Device Certificate",
@@ -29,83 +32,154 @@ DEVICE_REGISTER_SCHEMA = {
     "required": ["device_id", "account_id", "pubkey_ed25519", "issued_at", "expires_at", "sig"],
 }
 
-
-class BearerTokenPermission(permissions.BasePermission):
-
-    def authenticate_token(self, token):
-        try:
-            return Account.objects.get(user__auth_token__key=token)
-        except Account.DoesNotExist:
-            return None
-
-    def has_permission(self, request, view):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return False
-        token = auth.split(" ", 1)[1].strip()
-        account = self.authenticate_token(token)
-        if not account:
-            return False
-        request.account = account
-        return True
+SERVER_ISSUER_ID = "openshare"  #TODO: set this in settings
+PRIVATE_KEY_PATH = "openshare/settings/base.py/ED25519_PRIVATE_KEY_B64"
 
 
 class DeviceRegisterView(APIView):
-    permission_classes = [BearerTokenPermission]
+    permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
+    @transaction.atomic
+    def post(self, request):
+        data = request.data
+        account_id = request.user.account_id
+
+        device_uid = data.get("device_uid")
+        pubkey_b64 = data.get("pubkey_ed25519")
+        metadata = data.get("metadata", {})
+
+        if not device_uid or not pubkey_b64:
+            return Response({"error": "device_uid and pubkey_ed25519 required"}, status=400)
+
+        if Device.objects.filter(device_uid=device_uid, account_id=account_id).exists():
+            return Response({"error": "Device already registered"}, status=400)
+
         try:
-            payload = request.data
-            jsonschema_validate(instance=payload, schema=DEVICE_REGISTER_SCHEMA)
-        except JSONSchemaValidationError as e:
-            return Response({"error": "invalid_schema", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        device_id = payload.get("device_id")
-        pubkey_ed25519 = payload.get("pubkey_ed25519")
-        metadata = payload.get("metadata", {})
-
-        try:
-            pubkey_bytes = base64.b64decode(pubkey_ed25519)
+            pubkey_bytes = base64.urlsafe_b64decode(pubkey_b64)
         except Exception:
-            return Response({"error": "invalid_pubkey_base64"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid pubkey format"}, status=400)
 
-        if len(pubkey_bytes) != 32:
-            return Response({"error": "invalid_pubkey_length", "expected": 32, "actual": len(pubkey_bytes)},
-                            status=status.HTTP_400_BAD_REQUEST)
+        issued_at = timezone.now()
+        expires_at = issued_at + timedelta(days=365)
 
-        account = request.account
+        cert_blob = {
+            "device_uid": device_uid,
+            "account_id": str(account_id),
+            "issuer": SERVER_ISSUER_ID,
+            "issued_at": issued_at.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "pubkey_ed25519": pubkey_b64,
+            "metadata": metadata
+        }
 
-        # Device with same device id for this account must not exist TODO: check account field
-        if Device.objects.filter(account=account, device_id=device_id).exists():
-            return Response({"error": "device_id_already_exists"}, status=status.HTTP_409_CONFLICT)
+        cert_json = json.dumps(cert_blob, sort_keys=True).encode()
 
-        # issue cert
-        cert_json, signature = issue_device_cert(device_id=device_id, pubkey=pubkey_bytes,
-                                                        metadata=metadata, sigkey="", account_id=account.account_id)
+        with open(PRIVATE_KEY_PATH, "rb") as key_file:
+            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(key_file.read())
 
-        issued_at = timezone.datetime.fromisoformat(cert_json["issued_at"])
-        expires_at = timezone.datetime.fromisoformat(cert_json["expires_at"])
+        signature = private_key.sign(cert_json)
 
-        # create Device and store pubkey
-        device = Device.objects.create(account=account,
-                                       device_uid=device_id,
-                                       account_id = account.account_id,
-                                       pubkey_ed25519 = pubkey_ed25519,
-                                       pubkey_b64 = pubkey_bytes,
-                                       cert_sig = signature,
-                                       cert_issued_at = issued_at,
-                                       cert_expires_at = expires_at,
-                                       status="active",
-                                       metadata=metadata,
-                                       )
+        device = Device.objects.create(
+            device_uid=device_uid,
+            account_id=account_id,
+            status="active",
+            pubkey_ed25519=pubkey_bytes,
+            pubkey_b64=pubkey_b64,
+            cert_blob=cert_blob,
+            cert_sig=signature,
+            cert_issued_at=issued_at,
+            cert_expires_at=expires_at,
+            metadata=metadata
+        )
 
-        DeviceCerts.objects.create(device=device,
-                                   cert_blob=cert_json,
-                                   cert_sig=signature,
-                                   issued_at=issued_at,
-                                   expires_at=expires_at,
-                                   )
+        DeviceCerts.objects.create(
+            device=device,
+            cert_blob=cert_blob,
+            cert_sig=signature,
+            issued_at=issued_at,
+            expires_at=expires_at,
+            issuer_id=SERVER_ISSUER_ID
+        )
+
+        cert_blob["signature"] = signature.hex()
+        return Response(cert_blob, status=201)
 
 
 
-        return Response(cert_json, status=status.HTTP_201_CREATED)
+class DeviceRevokeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        device_id = request.data.get("device_id")
+        reason = request.data.get("reason", "revoked")
+
+        if not device_id:
+            return Response({"error": "device_id is required"}, status=400)
+
+        try:
+            device = Device.objects.get(id=device_id)
+        except Device.DoesNotExist:
+            return Response({"error": "Device not found"}, status=404)
+
+
+        if device.status == "revoked":
+            return Response({"message": "Device already revoked"}, status=200)
+
+        device.status = "revoked"
+        device.save(update_fields=["status"])
+
+        if not os.path.exists(PRIVATE_KEY_PATH):
+            return Response({"error": "Private key not found on server"}, status=500)
+
+        with open(PRIVATE_KEY_PATH, "rb") as key_file:
+            private_bytes = key_file.read()
+            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_bytes)
+
+        revoked_devices = Device.objects.filter(status="revoked")
+        revoked_entries = [
+            {
+                "device_id": str(d.id),
+                "revoked_at": timezone.now().isoformat(),
+                "reason": "revoked"
+            }
+            for d in revoked_devices
+        ]
+
+        crl_blob = {
+            "issuer": "server-ca",
+            "issued_at": timezone.now().isoformat(),
+            "entries": revoked_entries
+        }
+
+        crl_json = json.dumps(crl_blob, sort_keys=True).encode()
+
+        signature = private_key.sign(crl_json)
+
+        last_crl = Crls.objects.order_by("-version").first()
+        new_version = (last_crl.version + 1) if last_crl else 1
+
+        crl = Crls.objects.create(
+            version=new_version,
+            issuer_id="server-ca",
+            crl_blob=crl_blob,
+            sig=signature
+        )
+
+        CrlEntries.objects.create(
+            crl=crl,
+            revoked_device=device,
+            reason=reason
+        )
+
+        CurrentCrl.objects.update_or_create(
+            id=1,
+            defaults={"crl": crl, "updated_at": timezone.now()}
+        )
+
+        return Response({
+            "status": "revoked",
+            "device_id": str(device.id),
+            "crl_version": crl.version,
+            "signature": signature.hex()
+        })

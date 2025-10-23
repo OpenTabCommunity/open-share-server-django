@@ -1,15 +1,15 @@
 import uuid
 from datetime import timezone
-from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+
+from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 # from openshare.settings import CERT_EXPIRE_TIME TODO: set this in settings
 from django.utils.translation import gettext_lazy as _
 
+CERT_EXPIRE_TIME = 60 * 60 * 24 * 30 #one month
 
-cert_expire_time = 60 * 60 * 24 * 30 #one month
 
-
-class Device(PermissionsMixin):
+class Device(PermissionsMixin, models.Model):
 
     id = models.UUIDField(
         _("ID"),
@@ -26,7 +26,12 @@ class Device(PermissionsMixin):
         null=False
     )
 
-    # TODO: account_id
+    account_id = models.ForeignKey(
+        'accounts.models.Account',
+        on_delete=models.CASCADE,
+        related_name='devices',
+        null=False
+    )
 
     status = models.CharField(
         _("Device status"),
@@ -61,7 +66,7 @@ class Device(PermissionsMixin):
 
     cert_expires_at = models.DateTimeField(
       _("Certificate expires"),
-      default=(timezone.now() + cert_expire_time),
+      default=(timezone.now() + CERT_EXPIRE_TIME),
     )
 
     last_seen= models.DateTimeField(
@@ -103,7 +108,7 @@ class Device(PermissionsMixin):
 
 
 
-class DeviceCerts(PermissionsMixin):
+class DeviceCerts(PermissionsMixin, models.Model):
 
     id = models.UUIDField(
         _("ID"),
@@ -135,7 +140,7 @@ class DeviceCerts(PermissionsMixin):
 
     expires_at = models.DateTimeField(
       _("expires at"),
-      default=(timezone.now() + cert_expire_time),
+      default=(timezone.now() + CERT_EXPIRE_TIME),
     )
 
     issuer_id = models.CharField(
@@ -162,7 +167,7 @@ class DeviceCerts(PermissionsMixin):
         self.revoked_at = new_time
 
 
-class Crls(PermissionsMixin):
+class Crls(PermissionsMixin, models.Model):
     id = models.BigAutoField(
         _("ID"),
         primary_key=True,
@@ -200,7 +205,7 @@ class Crls(PermissionsMixin):
         _("Notes"),
     )
 
-class CrlEntries(PermissionsMixin):
+class CrlEntries(PermissionsMixin, models.Model):
 
     crl_id = models.ForeignKey(
         'Crls',
@@ -217,6 +222,7 @@ class CrlEntries(PermissionsMixin):
     revoked_at = models.DateTimeField(
         _("revoked at"),
         null=False,
+        auto_now=True,
     )
 
     reason = models.TextField(
@@ -224,7 +230,7 @@ class CrlEntries(PermissionsMixin):
     )
 
 
-class CurrentCrl(PermissionsMixin):
+class CurrentCrl(PermissionsMixin, models.Model):
 
     id = models.IntegerField(
         _("ID"),
