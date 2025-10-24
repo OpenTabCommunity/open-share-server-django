@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.urls import reverse
 from rest_framework.test import APIClient
 from ..models import Crls, CrlEntries, CurrentCrl
-from accounts.models import Account
+from apps.accounts.models import Account
 
 pytestmark = pytest.mark.django_db
 

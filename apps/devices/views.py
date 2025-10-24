@@ -1,8 +1,6 @@
 import base64
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
-from jsonschema import validate as jsonschema_validate, ValidationError as JSONSchemaValidationError
 from .models import CrlEntries, Crls, CurrentCrl
 from cryptography.hazmat.primitives.asymmetric import ed25519
 import json
@@ -11,26 +9,9 @@ from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
 from rest_framework.permissions import IsAuthenticated
-from cryptography.hazmat.primitives import serialization
 from .models import Device, DeviceCerts
+from rest_framework import status
 
-
-DEVICE_REGISTER_SCHEMA = {
-    "title": "Device Certificate",
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "device_id": {"type": "string", "description": "Unique device identifier"},
-        "account_id": {"type": "string", "description": "Account this device belongs to"},
-        "pubkey_ed25519": {"type": "string", "description": "Base64url encoded Ed25519 public key"},
-        "issued_at": {"type": "string", "format": "date-time"},
-        "expires_at": {"type": "string", "format": "date-time"},
-        "sig": {"type": "string", "description": "Base64url Ed25519 signature over canonicalized cert fields"},
-        "meta": {"type": "object", "additionalProperties": True,
-                 "description": "Optional free-form metadata (OS, client version, device name)"}
-    },
-    "required": ["device_id", "account_id", "pubkey_ed25519", "issued_at", "expires_at", "sig"],
-}
 
 SERVER_ISSUER_ID = "openshare"  #TODO: set this in settings
 PRIVATE_KEY_PATH = "openshare/settings/base.py/ED25519_PRIVATE_KEY_B64"
@@ -183,3 +164,39 @@ class DeviceRevokeView(APIView):
             "crl_version": crl.version,
             "signature": signature.hex()
         })
+
+
+
+
+class LastCrl(APIView):
+
+    def get(self, request):
+        try:
+            current = CurrentCrl.objects.select_related(None).first()
+            if not current or not current.crl_id:
+                return Response(
+                    {"detail": "No CRL available."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            crl = Crls.objects.get(id=current.crl_id)
+
+            response = Response(
+                crl.crl_blob,
+                status=status.HTTP_200_OK
+            )
+            response["ETag"] = str(crl.version)
+            response["Cache-Control"] = "no-cache"
+
+            return response
+
+        except Crls.DoesNotExist:
+            return Response(
+                {"detail": "CRL not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
