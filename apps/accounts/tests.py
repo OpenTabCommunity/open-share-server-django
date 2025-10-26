@@ -1,8 +1,8 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
-from .models import Account
-from devices.models import Device
+from apps.accounts.models import Account
+from apps.devices.models import Device
 from rest_framework_simplejwt.tokens import RefreshToken
 
 

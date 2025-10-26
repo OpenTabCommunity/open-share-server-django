@@ -4,8 +4,8 @@ from rest_framework import status, permissions
 from .serializers import AccountRegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Account
-from devices.models import Device
-from devices.serializers import DeviceListSerializer
+from apps.devices.models import Device
+from apps.devices.serializers import DeviceListSerializer
 
 
 class AccountRegisterView(APIView):

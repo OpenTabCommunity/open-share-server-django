@@ -1,12 +1,12 @@
 import pytest
 from base64 import b64encode
-from ..models import Device, DeviceCerts
+from apps.devices.models import Device, DeviceCerts
 import json
 import uuid
 from django.utils import timezone
 from django.urls import reverse
 from rest_framework.test import APIClient
-from ..models import Crls, CrlEntries, CurrentCrl
+from apps.devices.models import Crls, CrlEntries, CurrentCrl
 from apps.accounts.models import Account
 
 pytestmark = pytest.mark.django_db

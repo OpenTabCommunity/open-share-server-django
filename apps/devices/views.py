@@ -12,8 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Device, DeviceCerts
 from rest_framework import status
 
-
-SERVER_ISSUER_ID = "openshare"  #TODO: set this in settings
+SERVER_ISSUER_ID = "openshare"  # TODO: set this in settings
 PRIVATE_KEY_PATH = "openshare/settings/base.py/ED25519_PRIVATE_KEY_B64"
 
 
@@ -86,7 +85,6 @@ class DeviceRegisterView(APIView):
         return Response(cert_blob, status=201)
 
 
-
 class DeviceRevokeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -102,7 +100,6 @@ class DeviceRevokeView(APIView):
             device = Device.objects.get(id=device_id)
         except Device.DoesNotExist:
             return Response({"error": "Device not found"}, status=404)
-
 
         if device.status == "revoked":
             return Response({"message": "Device already revoked"}, status=200)
@@ -164,8 +161,6 @@ class DeviceRevokeView(APIView):
             "crl_version": crl.version,
             "signature": signature.hex()
         })
-
-
 
 
 class LastCrl(APIView):

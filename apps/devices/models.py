@@ -1,16 +1,15 @@
 import uuid
-from datetime import timezone
-
+from datetime import timedelta
+from django.utils import timezone
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
-# from openshare.settings import CERT_EXPIRE_TIME TODO: set this in settings
 from django.utils.translation import gettext_lazy as _
 
-CERT_EXPIRE_TIME = 60 * 60 * 24 * 30 #one month
+
+CERT_EXPIRE_TIME = timedelta(days=30)
 
 
-class Device(PermissionsMixin, models.Model):
-
+class Device( models.Model):
     id = models.UUIDField(
         _("ID"),
         primary_key=True,
@@ -27,7 +26,7 @@ class Device(PermissionsMixin, models.Model):
     )
 
     account_id = models.ForeignKey(
-        'accounts.models.Account',
+        'accounts.Account',
         on_delete=models.CASCADE,
         related_name='devices',
         null=False
@@ -40,36 +39,36 @@ class Device(PermissionsMixin, models.Model):
         null=False
     )
 
-    pubkey_ed25519= models.BinaryField(
+    pubkey_ed25519 = models.BinaryField(
         _("Public key ed25519"),
         max_length=32,
         null=False
     )
 
-    pubkey_b64= models.CharField(
+    pubkey_b64 = models.CharField(
         _("Public key base64"),
         max_length=255,
     )
 
-    cert_blob= models.JSONField(
+    cert_blob = models.JSONField(
         _("Certificate blob"),
         default=dict,
     )
 
-    cert_sig= models.BinaryField(
+    cert_sig = models.BinaryField(
         _("Certificate signature"),
     )
 
     cert_issued_at = models.DateTimeField(
-      _("Certificate issued at"),
+        _("Certificate issued at"),
     )
 
     cert_expires_at = models.DateTimeField(
-      _("Certificate expires"),
-      default=(timezone.now() + CERT_EXPIRE_TIME),
+        _("Certificate expires"),
+        default=lambda: timezone.now() + CERT_EXPIRE_TIME,
     )
 
-    last_seen= models.DateTimeField(
+    last_seen = models.DateTimeField(
         _("Last seen"),
         auto_now=True,
     )
@@ -94,22 +93,17 @@ class Device(PermissionsMixin, models.Model):
         verbose_name_plural = _("Devices")
         ordering = ("-created_at",)
 
-
+    def __str__(self):
+        return f"Device {self.device_uid} ({self.status})"
 
     def set_last_seen(self, new_time=None):
-        if new_time is None:
-            new_time = timezone.now()
-        self.last_seen = new_time
+        self.last_seen = new_time or timezone.now()
 
     def set_cert_issued_at(self, new_time=None):
-        if new_time is None:
-            new_time = timezone.now()
-        self.cert_issued_at = new_time
+        self.cert_issued_at = new_time or timezone.now()
 
 
-
-class DeviceCerts(PermissionsMixin, models.Model):
-
+class DeviceCerts( models.Model):
     id = models.UUIDField(
         _("ID"),
         primary_key=True,
@@ -119,28 +113,27 @@ class DeviceCerts(PermissionsMixin, models.Model):
     )
 
     device_id = models.ForeignKey(
-        _("Device ID"),
         Device,
-        to_field="id",
         on_delete=models.CASCADE,
+        related_name="certs",
     )
 
-    cert_blob= models.JSONField(
+    cert_blob = models.JSONField(
         _("Certificate blob"),
         default=dict,
     )
 
-    cert_sig= models.BinaryField(
+    cert_sig = models.BinaryField(
         _("Certificate signature"),
     )
 
     issued_at = models.DateTimeField(
-      _("issued at"),
+        _("issued at"),
     )
 
     expires_at = models.DateTimeField(
-      _("expires at"),
-      default=(timezone.now() + CERT_EXPIRE_TIME),
+        _("expires at"),
+        default=lambda: timezone.now() + CERT_EXPIRE_TIME,
     )
 
     issuer_id = models.CharField(
@@ -151,23 +144,24 @@ class DeviceCerts(PermissionsMixin, models.Model):
     revoked_at = models.DateTimeField(
         _("revoked at"),
         null=True,
+        blank=True,
     )
 
-
     class Meta:
-        verbose_name = _("Device certs")
+        verbose_name = _("Device Certificate")
+        verbose_name_plural = _("Device Certificates")
 
+    def __str__(self):
+        return f"Cert for {self.device_id.device_uid}"
 
     def set_issuer_id(self, issuer=None):
         self.issuer_id = issuer
 
     def set_revoked_at(self, new_time=None):
-        if new_time is None:
-            new_time = timezone.now()
-        self.revoked_at = new_time
+        self.revoked_at = new_time or timezone.now()
 
 
-class Crls(PermissionsMixin, models.Model):
+class Crls( models.Model):
     id = models.BigAutoField(
         _("ID"),
         primary_key=True,
@@ -203,25 +197,34 @@ class Crls(PermissionsMixin, models.Model):
 
     notes = models.TextField(
         _("Notes"),
+        blank=True,
     )
 
-class CrlEntries(PermissionsMixin, models.Model):
+    class Meta:
+        verbose_name = _("CRL")
+        verbose_name_plural = _("CRLs")
 
+    def __str__(self):
+        return f"CRL v{self.version} ({self.issuer_id})"
+
+
+class CrlEntries( models.Model):
     crl_id = models.ForeignKey(
-        'Crls',
+        Crls,
         on_delete=models.CASCADE,
+        related_name="entries",
         null=False,
     )
 
     revoked_device_id = models.ForeignKey(
-        'Device',
+        Device,
         on_delete=models.CASCADE,
+        related_name="revocations",
         null=False,
     )
 
     revoked_at = models.DateTimeField(
         _("revoked at"),
-        null=False,
         auto_now=True,
     )
 
@@ -229,20 +232,36 @@ class CrlEntries(PermissionsMixin, models.Model):
         _("Reason"),
     )
 
+    class Meta:
+        verbose_name = _("CRL Entry")
+        verbose_name_plural = _("CRL Entries")
 
-class CurrentCrl(PermissionsMixin, models.Model):
+    def __str__(self):
+        return f"Revoked {self.revoked_device_id.device_uid}"
 
+
+class CurrentCrl( models.Model):
     id = models.IntegerField(
         _("ID"),
+        primary_key=True,
         null=False,
     )
 
     crl_id = models.ForeignKey(
-        'Crls',
+        Crls,
         on_delete=models.CASCADE,
+        related_name="current_crl",
     )
 
     updated_at = models.DateTimeField(
         _("updated at"),
-        default= timezone.now
+        default=timezone.now,
     )
+
+    class Meta:
+        verbose_name = _("Current CRL")
+        verbose_name_plural = _("Current CRLs")
+
+
+    def __str__(self):
+        return f"Current CRL #{self.crl_id_id}"
