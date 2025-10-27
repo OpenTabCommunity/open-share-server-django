@@ -17,7 +17,7 @@ PRIVATE_KEY_PATH = "openshare/settings/base.py/ED25519_PRIVATE_KEY_B64"
 
 
 class DeviceRegisterView(APIView):
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def post(self, request):
@@ -86,7 +86,7 @@ class DeviceRegisterView(APIView):
 
 
 class DeviceRevokeView(APIView):
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def post(self, request):

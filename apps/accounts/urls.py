@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AccountRegisterView, AccountDevicesView
+from apps.accounts.views import AccountRegisterView, AccountDevicesView
 
 urlpatterns = [
     path("register", AccountRegisterView.as_view(), name="createAccount"),
