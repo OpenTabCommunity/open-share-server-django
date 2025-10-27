@@ -1,8 +1,10 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from .models import TrustRoot
-from .serializers import TrustRootSerializer
+from rest_framework import permissions
+
+from apps.trust.models import TrustRoot
+from apps.trust.serializers import TrustRootSerializer
 
 
 class TrustRootView(APIView):
@@ -10,6 +12,7 @@ class TrustRootView(APIView):
     GET /trustroot
     Returns the current server trust roots and supported protocol versions
     """
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         trust_roots = TrustRoot.objects.filter(active=True)

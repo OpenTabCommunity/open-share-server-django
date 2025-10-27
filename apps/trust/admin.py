@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import TrustRoot
+
+from apps.trust.models import TrustRoot
 
 
 @admin.register(TrustRoot)
