@@ -11,27 +11,33 @@ from django.db import transaction
 from rest_framework.permissions import IsAuthenticated
 from .models import Device, DeviceCerts
 from rest_framework import status
+from openshare.settings import ED25519_PRIVATE_KEY_B64
+from apps.accounts.models import Account
 
 SERVER_ISSUER_ID = "openshare"  # TODO: set this in settings
-PRIVATE_KEY_PATH = "openshare/settings/base.py/ED25519_PRIVATE_KEY_B64"
+PRIVATE_KEY_PATH = "openshare/settings/ED25519_PRIVATE_KEY_B64"
 
 
 class DeviceRegisterView(APIView):
-    #permission_classes = [IsAuthenticated]
+   # permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def post(self, request):
         data = request.data
-        account_id = request.user.account_id
-
+        account_email = data.get("email")
         device_uid = data.get("device_uid")
         pubkey_b64 = data.get("pubkey_ed25519")
         metadata = data.get("metadata", {})
 
+        try:
+            acc = Account.objects.get(email=account_email)
+        except Account.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
         if not device_uid or not pubkey_b64:
             return Response({"error": "device_uid and pubkey_ed25519 required"}, status=400)
 
-        if Device.objects.filter(device_uid=device_uid, account_id=account_id).exists():
+        if Device.objects.filter(device_uid=device_uid, account_id=acc).exists():
             return Response({"error": "Device already registered"}, status=400)
 
         try:
@@ -44,7 +50,7 @@ class DeviceRegisterView(APIView):
 
         cert_blob = {
             "device_uid": device_uid,
-            "account_id": str(account_id),
+            "account_id": str(acc),
             "issuer": SERVER_ISSUER_ID,
             "issued_at": issued_at.isoformat(),
             "expires_at": expires_at.isoformat(),
@@ -54,14 +60,12 @@ class DeviceRegisterView(APIView):
 
         cert_json = json.dumps(cert_blob, sort_keys=True).encode()
 
-        with open(PRIVATE_KEY_PATH, "rb") as key_file:
-            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(key_file.read())
+        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(ED25519_PRIVATE_KEY_B64.encode('utf-8'))
 
         signature = private_key.sign(cert_json)
-
         device = Device.objects.create(
             device_uid=device_uid,
-            account_id=account_id,
+            account_id=acc,
             status="active",
             pubkey_ed25519=pubkey_bytes,
             pubkey_b64=pubkey_b64,
@@ -73,7 +77,7 @@ class DeviceRegisterView(APIView):
         )
 
         DeviceCerts.objects.create(
-            device=device,
+            device_id=device,
             cert_blob=cert_blob,
             cert_sig=signature,
             issued_at=issued_at,
@@ -86,7 +90,7 @@ class DeviceRegisterView(APIView):
 
 
 class DeviceRevokeView(APIView):
-    #permission_classes = [IsAuthenticated]
+   # permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def post(self, request):
@@ -102,17 +106,12 @@ class DeviceRevokeView(APIView):
             return Response({"error": "Device not found"}, status=404)
 
         if device.status == "revoked":
-            return Response({"message": "Device already revoked"}, status=200)
+            return Response({"message": "Device already revoked"}, status=400)
 
         device.status = "revoked"
         device.save(update_fields=["status"])
 
-        if not os.path.exists(PRIVATE_KEY_PATH):
-            return Response({"error": "Private key not found on server"}, status=500)
-
-        with open(PRIVATE_KEY_PATH, "rb") as key_file:
-            private_bytes = key_file.read()
-            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_bytes)
+        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(ED25519_PRIVATE_KEY_B64.encode('utf-8'))
 
         revoked_devices = Device.objects.filter(status="revoked")
         revoked_entries = [
@@ -145,14 +144,14 @@ class DeviceRevokeView(APIView):
         )
 
         CrlEntries.objects.create(
-            crl=crl,
-            revoked_device=device,
+            crl_id=crl,
+            revoked_device_id=device,
             reason=reason
         )
 
         CurrentCrl.objects.update_or_create(
             id=1,
-            defaults={"crl": crl, "updated_at": timezone.now()}
+            defaults={"crl_id": crl, "updated_at": timezone.now()}
         )
 
         return Response({
@@ -164,7 +163,7 @@ class DeviceRevokeView(APIView):
 
 
 class LastCrl(APIView):
-
+    #permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
             current = CurrentCrl.objects.select_related(None).first()
@@ -174,7 +173,7 @@ class LastCrl(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            crl = Crls.objects.get(id=current.crl_id)
+            crl = Crls.objects.get(id=current.id)
 
             response = Response(
                 crl.crl_blob,

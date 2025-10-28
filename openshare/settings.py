@@ -131,3 +131,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SIMPLE_JWT = {
     'USER_ID_FIELD': 'account_id',
 }
+
+ED25519_PRIVATE_KEY_B64 = "qazqazqazqazqazqazqazqazqazqazqa"

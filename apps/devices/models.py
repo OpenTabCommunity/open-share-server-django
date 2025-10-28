@@ -103,7 +103,7 @@ class Device( models.Model):
         self.cert_issued_at = new_time or timezone.now()
 
 
-class DeviceCerts( models.Model):
+class DeviceCerts(models.Model):
     id = models.UUIDField(
         _("ID"),
         primary_key=True,
@@ -177,6 +177,7 @@ class Crls( models.Model):
     issued_at = models.DateTimeField(
         _("issued at"),
         null=False,
+        default=timezone.now()
     )
 
     issuer_id = models.CharField(
@@ -240,7 +241,7 @@ class CrlEntries( models.Model):
         return f"Revoked {self.revoked_device_id.device_uid}"
 
 
-class CurrentCrl( models.Model):
+class CurrentCrl(models.Model):
     id = models.IntegerField(
         _("ID"),
         primary_key=True,
