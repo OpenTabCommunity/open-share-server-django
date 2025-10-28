@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import TrustRoot
+
+from apps.trust.models import TrustRoot
 
 
 class TrustRootSerializer(serializers.ModelSerializer):

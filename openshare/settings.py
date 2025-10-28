@@ -132,4 +132,14 @@ SIMPLE_JWT = {
     'USER_ID_FIELD': 'account_id',
 }
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+
 ED25519_PRIVATE_KEY_B64 = "qazqazqazqazqazqazqazqazqazqazqa"
