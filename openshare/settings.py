@@ -135,7 +135,7 @@ REST_FRAMEWORK = {
     ),
 }
 
-ED25519_PRIVATE_KEY_B64 = "qazqazqazqazqazqazqazqazqazqazqa"
+ED25519_PRIVATE_KEY_B64 = "l-j6AoF1a047WXFAhinUHR1b0cU2x4z36ShKLX4u3Jo"
 SERVER_ISSUER_ID = "OpenShareServer"
 CERT_EXPIRE_TIME = timedelta(days=30)
 

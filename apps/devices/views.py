@@ -2,7 +2,7 @@ import base64
 import json
 from datetime import timedelta
 
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
@@ -58,7 +58,8 @@ class DeviceRegisterView(APIView):
         }
         cert_json = json.dumps(cert_blob, sort_keys=True).encode()
 
-        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(ED25519_PRIVATE_KEY_B64.encode('utf-8'))
+        private_key_bytes = base64.urlsafe_b64decode(ED25519_PRIVATE_KEY_B64 + "==")
+        private_key = Ed25519PrivateKey.from_private_bytes(private_key_bytes)
         signature = private_key.sign(cert_json)
 
         device = Device.objects.create(
@@ -109,7 +110,8 @@ class DeviceRevokeView(APIView):
         device.status = "revoked"
         device.save(update_fields=["status"])
 
-        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(ED25519_PRIVATE_KEY_B64.encode('utf-8'))
+        private_key_bytes = base64.urlsafe_b64decode(ED25519_PRIVATE_KEY_B64 + "==")
+        private_key = Ed25519PrivateKey.from_private_bytes(private_key_bytes)
 
         revoked_devices = Device.objects.filter(status="revoked")
         revoked_entries = [
