@@ -9,12 +9,11 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
+from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -42,7 +41,6 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.trust",
     "apps.devices",
-
 
 ]
 
@@ -75,7 +73,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'openshare.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
@@ -85,7 +82,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -105,7 +101,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -116,7 +111,6 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -141,5 +135,7 @@ REST_FRAMEWORK = {
     ),
 }
 
-
 ED25519_PRIVATE_KEY_B64 = "qazqazqazqazqazqazqazqazqazqazqa"
+SERVER_ISSUER_ID = "OpenShareServer"
+CERT_EXPIRE_TIME = timedelta(days=30)
+

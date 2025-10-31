@@ -1,25 +1,24 @@
 import base64
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .models import CrlEntries, Crls, CurrentCrl
-from cryptography.hazmat.primitives.asymmetric import ed25519
 import json
-import os
 from datetime import timedelta
-from django.utils import timezone
-from django.db import transaction
-from rest_framework.permissions import IsAuthenticated
-from .models import Device, DeviceCerts
-from rest_framework import status
-from openshare.settings import ED25519_PRIVATE_KEY_B64
-from apps.accounts.models import Account
 
-SERVER_ISSUER_ID = "openshare"  # TODO: set this in settings
-PRIVATE_KEY_PATH = "openshare/settings/ED25519_PRIVATE_KEY_B64"
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from django.db import transaction
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.accounts.models import Account
+from openshare.settings import ED25519_PRIVATE_KEY_B64
+from openshare.settings import SERVER_ISSUER_ID
+from .models import CrlEntries, Crls, CurrentCrl
+from .models import Device, DeviceCerts
 
 
 class DeviceRegisterView(APIView):
-   # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def post(self, request):
@@ -57,12 +56,11 @@ class DeviceRegisterView(APIView):
             "pubkey_ed25519": pubkey_b64,
             "metadata": metadata
         }
-
         cert_json = json.dumps(cert_blob, sort_keys=True).encode()
 
         private_key = ed25519.Ed25519PrivateKey.from_private_bytes(ED25519_PRIVATE_KEY_B64.encode('utf-8'))
-
         signature = private_key.sign(cert_json)
+
         device = Device.objects.create(
             device_uid=device_uid,
             account_id=acc,
@@ -90,7 +88,7 @@ class DeviceRegisterView(APIView):
 
 
 class DeviceRevokeView(APIView):
-   # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     @transaction.atomic
     def post(self, request):
@@ -128,7 +126,6 @@ class DeviceRevokeView(APIView):
             "issued_at": timezone.now().isoformat(),
             "entries": revoked_entries
         }
-
         crl_json = json.dumps(crl_blob, sort_keys=True).encode()
 
         signature = private_key.sign(crl_json)
@@ -163,7 +160,8 @@ class DeviceRevokeView(APIView):
 
 
 class LastCrl(APIView):
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
             current = CurrentCrl.objects.select_related(None).first()

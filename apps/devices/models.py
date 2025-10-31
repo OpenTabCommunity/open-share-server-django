@@ -1,15 +1,12 @@
 import uuid
-from datetime import timedelta
-from django.utils import timezone
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from openshare.settings import CERT_EXPIRE_TIME
 
 
-CERT_EXPIRE_TIME = timedelta(days=30)
-
-
-class Device( models.Model):
+class Device(models.Model):
     id = models.UUIDField(
         _("ID"),
         primary_key=True,
@@ -161,7 +158,7 @@ class DeviceCerts(models.Model):
         self.revoked_at = new_time or timezone.now()
 
 
-class Crls( models.Model):
+class Crls(models.Model):
     id = models.BigAutoField(
         _("ID"),
         primary_key=True,
@@ -209,7 +206,7 @@ class Crls( models.Model):
         return f"CRL v{self.version} ({self.issuer_id})"
 
 
-class CrlEntries( models.Model):
+class CrlEntries(models.Model):
     crl_id = models.ForeignKey(
         Crls,
         on_delete=models.CASCADE,
@@ -262,7 +259,6 @@ class CurrentCrl(models.Model):
     class Meta:
         verbose_name = _("Current CRL")
         verbose_name_plural = _("Current CRLs")
-
 
     def __str__(self):
         return f"Current CRL #{self.crl_id_id}"

@@ -1,34 +1,36 @@
-import json
 import base64
+import json
 import uuid
-from django.utils import timezone
-from django.urls import reverse
-from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.devices.models import Device, Crls, CurrentCrl
-from apps.accounts.models import Account
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework.test import APIClient
 from rest_framework.test import APITestCase
+
+from apps.accounts.models import Account
+from apps.devices.models import Device, Crls, CurrentCrl
 
 
 class DeviceRegisterTest(APITestCase):
 
-    def test_device_register_success(self):
-        account = Account.objects.create_user(
-            email="devices@example.com",
-            password="testpass",
-            display_name="Device Tester"
+    def setUp(self):
+        self.client = APIClient()
+        self.account = Account.objects.create(
+            account_id=uuid.uuid4(),
+            display_name="Armin",
+            email="a@example.com",
         )
-        client = APIClient()
-        client.force_authenticate(user=account)
+        self.client.force_authenticate(user=self.account)
+
+    def test_device_register_success(self):
         data = {
             "device_uid": "dev-001",
             "pubkey_ed25519": base64.b64encode(b"0" * 32).decode(),
             "metadata": {"os": "linux"},
-            "email": account.email
+            "email": self.account.email
         }
 
-        response = client.post(
+        response = self.client.post(
             reverse("device-register"),
             data,
             format='json'
@@ -37,17 +39,10 @@ class DeviceRegisterTest(APITestCase):
         self.assertEqual(response.status_code, 201)
 
     def test_device_register_duplicate_id(self):
-        client = APIClient()
-        account = Account.objects.create_user(
-            email="devices@example.com",
-            password="testpass",
-            display_name="Device Tester"
-        )
-        client.force_authenticate(user=account)
         Device.objects.create(
             id=uuid.uuid4(),
             device_uid="dev-001",
-            account_id=account,
+            account_id=self.account,
             status="active",
             pubkey_ed25519=b"0" * 32,
             cert_issued_at=timezone.now()
@@ -57,10 +52,10 @@ class DeviceRegisterTest(APITestCase):
             "device_uid": "dev-001",
             "pubkey_ed25519": base64.b64encode(b"1" * 32).decode(),
             "metadata": {"os": "linux"},
-            "email": account.email
+            "email": self.account.email
         }
 
-        response = client.post(
+        response = self.client.post(
             reverse("device-register"),
             data=json.dumps(data),
             content_type="application/json",
@@ -70,19 +65,12 @@ class DeviceRegisterTest(APITestCase):
         assert "error" in response.json()
 
     def test_device_register_missing_field(self):
-        client = APIClient()
-        account = Account.objects.create_user(
-            email="devices@example.com",
-            password="testpass",
-            display_name="Device Tester"
-        )
-        client.force_authenticate(user=account)
         data = {
-            "email": account.email,
+            "email": self.account.email,
             "pubkey_ed25519": base64.b64encode(b"0" * 32).decode()  # device_id missing
         }
 
-        response = client.post(
+        response = self.client.post(
             reverse("device-register"),
             data=json.dumps(data),
             content_type="application/json",
@@ -94,17 +82,20 @@ class DeviceRegisterTest(APITestCase):
 
 class DeviceRevokeTest(APITestCase):
 
-    def test_device_revoke_success(self):
-        client = APIClient()
-        account = Account.objects.create_user(
-            email="devices@example.com",
-            password="testpass",
-            display_name="Device Tester"
+    def setUp(self):
+        self.client = APIClient()
+        self.account = Account.objects.create(
+            account_id=uuid.uuid4(),
+            display_name="Armin",
+            email="a@example.com",
         )
+        self.client.force_authenticate(user=self.account)
+
+    def test_device_revoke_success(self):
         device = Device.objects.create(
             id=uuid.uuid4(),
             device_uid="dev-003",
-            account_id=account,
+            account_id=self.account,
             status="active",
             pubkey_ed25519=b"0" * 32,
             cert_issued_at=timezone.now(),
@@ -122,7 +113,7 @@ class DeviceRevokeTest(APITestCase):
 
         data = {"device_id": str(device.id), "reason": "Compromised"}
 
-        response = client.post(
+        response = self.client.post(
             reverse("device-revoke"),
             data=json.dumps(data),
             content_type="application/json",
@@ -132,15 +123,9 @@ class DeviceRevokeTest(APITestCase):
         assert device.status == "revoked"
 
     def test_device_revoke_nonexistent(self):
-        client = APIClient()
-        account = Account.objects.create_user(
-            email="devices@example.com",
-            password="testpass",
-            display_name="Device Tester"
-        )
         data = {"device_id": str(uuid.uuid4()), "reason": "Compromised"}
 
-        response = client.post(
+        response = self.client.post(
             reverse("device-revoke"),
             data=json.dumps(data),
             content_type="application/json",
@@ -149,16 +134,10 @@ class DeviceRevokeTest(APITestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_device_revoke_already_revoked(self):
-        client = APIClient()
-        account = Account.objects.create(
-            account_id=uuid.uuid4(),
-            display_name="Armin",
-            email="a@example.com",
-        )
         device = Device.objects.create(
             id=uuid.uuid4(),
             device_uid="dev-004",
-            account_id=account,
+            account_id=self.account,
             status="revoked",
             pubkey_ed25519=b"0" * 32,
             cert_issued_at=timezone.now(),
@@ -166,7 +145,7 @@ class DeviceRevokeTest(APITestCase):
 
         data = {"device_id": str(device.id), "reason": "Compromised"}
 
-        response = client.post(
+        response = self.client.post(
             reverse("device-revoke"),
             data=json.dumps(data),
             content_type="application/json",
@@ -176,9 +155,16 @@ class DeviceRevokeTest(APITestCase):
 
 
 class CrlTest(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.account = Account.objects.create(
+            account_id=uuid.uuid4(),
+            display_name="Armin",
+            email="a@example.com",
+        )
+        self.client.force_authenticate(user=self.account)
 
     def test_get_crl_success(self):
-        client = APIClient()
         crl = Crls.objects.create(
             version=10,
             issuer_id="server-1",
@@ -188,12 +174,9 @@ class CrlTest(APITestCase):
             notes="Test CRL"
         )
         CurrentCrl.objects.update_or_create(id=1, crl_id=crl)
-
-        response = client.get(reverse("device-crl"))
+        response = self.client.get(reverse("device-crl"))
         self.assertEqual(response.status_code, 200)
 
     def test_get_crl_not_found(self):
-        client = APIClient()
-        response = client.get(reverse("device-crl"))
-
+        response = self.client.get(reverse("device-crl"))
         self.assertEqual(response.status_code, 404)
